@@ -8,6 +8,7 @@ import (
 	"github.com/balaganapathyparthiban/quickshare-go/db"
 	"github.com/balaganapathyparthiban/quickshare-go/routes"
 	"github.com/balaganapathyparthiban/quickshare-go/services"
+	"github.com/balaganapathyparthiban/quickshare-go/utilities"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/helmet/v2"
@@ -38,21 +39,29 @@ func init() {
 	}
 
 	db.InitDB()
+	utilities.InitCron()
 }
 
 func main() {
 	app := fiber.New()
+
+	app.Server().StreamRequestBody = true
 
 	/* Middlewares */
 	app.Use(cors.New())
 	app.Use(helmet.New())
 
 	/* Routes */
-	api := app.Group("/api")
-	routes.ApiRoutes(api)
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Quick Share")
+	})
 	app.Get("/:URL", services.RedirectUrl)
 
-	app.Server().StreamRequestBody = true
+	routes.ApiRoutes(app)
+
+	app.All("*", func(c *fiber.Ctx) error {
+		return c.SendString("Not an valid path/method.")
+	})
 
 	app.Listen(os.Getenv("PORT"))
 }

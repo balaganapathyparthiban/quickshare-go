@@ -15,20 +15,8 @@ import (
 	"github.com/teris-io/shortid"
 )
 
-type FileData struct {
-	Type     string
-	Progress float64
-	Path     string
-	Expired  string
-}
-
 func FileUpload(c *fiber.Ctx) error {
-	query := new(struct {
-		Name  string `json:"name" validate:"required"`
-		Size  int    `json:"size" validate:"required"`
-		Type  string `json:"type" valudate:"required"`
-		Async bool   `json:"async"`
-	})
+	query := new(utilities.FileUpload)
 	c.QueryParser(query)
 
 	if errors := utilities.Validation(query); errors != nil {
@@ -37,8 +25,8 @@ func FileUpload(c *fiber.Ctx) error {
 		})
 	}
 
-	fd := new(FileData)
-	fd.Expired = time.Now().Add(time.Hour * 24).Format("January-2-2006-03:04:05PM")
+	fd := new(utilities.FileData)
+	fd.Expired = time.Now().Add(-time.Hour * 24)
 
 	hash := sha256.New()
 	hash.Write([]byte(time.Now().String()))
@@ -48,7 +36,10 @@ func FileUpload(c *fiber.Ctx) error {
 	channel := make(chan int)
 
 	go func(rd *io.Reader) {
-		file, err := os.Create(fmt.Sprintf("files/%s.%s", query.Name, query.Type))
+		if _, err := os.Stat(fmt.Sprintf("files/%s", id)); os.IsNotExist(err) {
+			os.Mkdir(fmt.Sprintf("files/%s", id), 0777)
+		}
+		file, err := os.Create(fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type))
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -77,7 +68,7 @@ func FileUpload(c *fiber.Ctx) error {
 			fd.Progress = ((float64(fileSize) / float64(query.Size)) * 100) - 1
 		}
 
-		rfile, err := os.Open(fmt.Sprintf("files/%s.%s", query.Name, query.Type))
+		rfile, err := os.Open(fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type))
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -85,7 +76,8 @@ func FileUpload(c *fiber.Ctx) error {
 		defer rfile.Close()
 
 		fd.Progress = 100
-		fd.Path = fmt.Sprintf("files/%s.%s", query.Name, query.Type)
+		fd.Path = fmt.Sprintf("%s/%s.%s", id, query.Name, query.Type)
+		fd.Dir = id
 		fmt.Println(fd)
 		fdMarshal, _ := json.Marshal(&fd)
 
@@ -108,15 +100,15 @@ func FileUpload(c *fiber.Ctx) error {
 		<-channel
 
 		return c.JSON(fiber.Map{
-			"cid": "",
+			"progress":  fd.Progress,
+			"share_url": fmt.Sprintf("/api/file/download?id=%s", id),
+			"expired":   fd.Expired,
 		})
 	}
 }
 
 func FileUploadProgress(c *fiber.Ctx) error {
-	query := new(struct {
-		Id string `json:"id" validate:"required,min=1"`
-	})
+	query := new(utilities.FileUploadProgress)
 	c.QueryParser(query)
 
 	if errors := utilities.Validation(query); errors != nil {
@@ -131,7 +123,7 @@ func FileUploadProgress(c *fiber.Ctx) error {
 		return err
 	}
 
-	var fdUnmarshal FileData
+	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
 
 	return c.JSON(fiber.Map{
@@ -142,9 +134,7 @@ func FileUploadProgress(c *fiber.Ctx) error {
 }
 
 func FileDownload(c *fiber.Ctx) error {
-	query := new(struct {
-		Id string `json:"id" validate:"required,min=1"`
-	})
+	query := new(utilities.FileDownload)
 	c.QueryParser(query)
 
 	if errors := utilities.Validation(query); errors != nil {
@@ -159,7 +149,7 @@ func FileDownload(c *fiber.Ctx) error {
 		return err
 	}
 
-	var fdUnmarshal FileData
+	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
 
 	f, _ := os.Open(fdUnmarshal.Path)
@@ -167,10 +157,8 @@ func FileDownload(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).SendStream(bufio.NewReader(f))
 }
 
-func ShortenerUrl(c *fiber.Ctx) error {
-	query := new(struct {
-		Url string `json:"url" validate:"required,min=1"`
-	})
+func ShortenUrl(c *fiber.Ctx) error {
+	query := new(utilities.ShortenUrl)
 	c.QueryParser(query)
 
 	if errors := utilities.Validation(query); errors != nil {

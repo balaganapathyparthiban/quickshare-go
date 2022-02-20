@@ -5,12 +5,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func ApiRoutes(router fiber.Router) {
+func ApiRoutes(app *fiber.App) {
+	api := app.Group("/api")
+
 	/* File api */
-	router.Post("/file/upload", services.FileUpload)
-	router.Get("/file/upload/progress", services.FileUploadProgress)
-	router.Get("/file/download", services.FileDownload)
+	api.Post("/file/upload", services.FileUpload)
+	api.Get("/file/upload/progress", services.FileUploadProgress)
+	api.Get("/file/download", services.FileDownload)
 
 	/* Shortener api */
-	router.Get("/shortener/url", services.ShortenerUrl)
+	api.Get("/shorten/url", services.ShortenUrl)
 }
