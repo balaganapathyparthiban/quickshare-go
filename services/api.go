@@ -36,10 +36,13 @@ func FileUpload(c *fiber.Ctx) error {
 	channel := make(chan int)
 
 	go func(rd *io.Reader) {
-		if _, err := os.Stat(fmt.Sprintf("files/%s", id)); os.IsNotExist(err) {
-			os.Mkdir(fmt.Sprintf("files/%s", id), 0777)
+		folderPath := fmt.Sprintf("files/%s", id)
+		if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+			os.Mkdir(folderPath, 0777)
 		}
-		file, err := os.Create(fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type))
+
+		filePath := fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type)
+		file, err := os.Create(filePath)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -68,7 +71,7 @@ func FileUpload(c *fiber.Ctx) error {
 			fd.Progress = ((float64(fileSize) / float64(query.Size)) * 100) - 1
 		}
 
-		rfile, err := os.Open(fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type))
+		rfile, err := os.Open(filePath)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -76,9 +79,8 @@ func FileUpload(c *fiber.Ctx) error {
 		defer rfile.Close()
 
 		fd.Progress = 100
-		fd.Path = fmt.Sprintf("%s/%s.%s", id, query.Name, query.Type)
+		fd.Path = filePath
 		fd.Dir = id
-		fmt.Println(fd)
 		fdMarshal, _ := json.Marshal(&fd)
 
 		err = db.Store.Put([]byte(id), fdMarshal, nil)
@@ -100,7 +102,7 @@ func FileUpload(c *fiber.Ctx) error {
 		<-channel
 
 		return c.JSON(fiber.Map{
-			"progress":  fd.Progress,
+			"progress":  fmt.Sprintf("%d%s", int64(fd.Progress), "%"),
 			"share_url": fmt.Sprintf("/api/file/download?id=%s", id),
 			"expired":   fd.Expired,
 		})
