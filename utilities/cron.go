@@ -26,7 +26,7 @@ func InitCron() {
 			isExpired := time.Now().After(fdUnmarshal.Expired)
 
 			if isExpired {
-				err := os.RemoveAll(fmt.Sprintf("files/%s", fdUnmarshal.Dir))
+				err := os.RemoveAll(fmt.Sprintf("files/%s", key))
 				if err != nil {
 					fmt.Println(err)
 					continue

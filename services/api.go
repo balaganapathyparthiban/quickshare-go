@@ -3,6 +3,7 @@ package services
 import (
 	"bufio"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,10 +27,15 @@ func FileUpload(c *fiber.Ctx) error {
 	}
 
 	fd := new(utilities.FileData)
-	fd.Expired = time.Now().Add(-time.Hour * 24)
+	fd.Title = query.Title
+	fd.Message = query.Message
+	if len(query.Password) > 0 {
+		passwordHash := sha256.New()
+		passwordHash.Write([]byte(query.Password))
+		fd.Password = base64.URLEncoding.EncodeToString(passwordHash.Sum(nil))
+	}
+	fd.Expired = time.Now().Add(time.Hour * 24)
 
-	hash := sha256.New()
-	hash.Write([]byte(time.Now().String()))
 	id, _ := shortid.Generate()
 
 	reader := c.Context().RequestBodyStream()
@@ -41,7 +47,7 @@ func FileUpload(c *fiber.Ctx) error {
 			os.Mkdir(folderPath, 0777)
 		}
 
-		filePath := fmt.Sprintf("files/%s/%s.%s", id, query.Name, query.Type)
+		filePath := fmt.Sprintf("files/%s/%s", id, query.Name)
 		file, err := os.Create(filePath)
 		if err != nil {
 			fmt.Println(err)
@@ -49,8 +55,7 @@ func FileUpload(c *fiber.Ctx) error {
 		}
 		defer file.Close()
 
-		fileSize := 0
-		buffer := make([]byte, 0, 512*1024)
+		buffer := make([]byte, 0, 1024*1024)
 		for {
 			length, err := io.ReadFull(reader, buffer[:cap(buffer)])
 			buffer = buffer[:length]
@@ -60,15 +65,11 @@ func FileUpload(c *fiber.Ctx) error {
 				}
 			}
 
-			fileSize += length
-
 			_, err = file.Write(buffer)
 			if err != nil {
 				fmt.Println(err)
 				break
 			}
-
-			fd.Progress = ((float64(fileSize) / float64(query.Size)) * 100) - 1
 		}
 
 		rfile, err := os.Open(filePath)
@@ -78,9 +79,7 @@ func FileUpload(c *fiber.Ctx) error {
 		}
 		defer rfile.Close()
 
-		fd.Progress = 100
 		fd.Path = filePath
-		fd.Dir = id
 		fdMarshal, _ := json.Marshal(&fd)
 
 		err = db.Store.Put([]byte(id), fdMarshal, nil)
@@ -92,25 +91,16 @@ func FileUpload(c *fiber.Ctx) error {
 		channel <- 1
 	}(&reader)
 
-	if query.Async {
-		time.Sleep(time.Duration(1) * time.Second)
+	<-channel
 
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"progress_url": fmt.Sprintf("/api/file/upload/progress?id=%s", id),
-		})
-	} else {
-		<-channel
-
-		return c.JSON(fiber.Map{
-			"progress":  fmt.Sprintf("%d%s", int64(fd.Progress), "%"),
-			"share_url": fmt.Sprintf("/api/file/download?id=%s", id),
-			"expired":   fd.Expired,
-		})
-	}
+	return c.JSON(fiber.Map{
+		"file_id": id,
+		"expired": fd.Expired,
+	})
 }
 
-func FileUploadProgress(c *fiber.Ctx) error {
-	query := new(utilities.FileUploadProgress)
+func FileInfo(c *fiber.Ctx) error {
+	query := new(utilities.FileDownload)
 	c.QueryParser(query)
 
 	if errors := utilities.Validation(query); errors != nil {
@@ -128,10 +118,12 @@ func FileUploadProgress(c *fiber.Ctx) error {
 	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
 
-	return c.JSON(fiber.Map{
-		"progress":  fdUnmarshal.Progress,
-		"share_url": fmt.Sprintf("/api/file/download?id=%s", query.Id),
-		"expired":   fdUnmarshal.Expired,
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"title":               fdUnmarshal.Title,
+		"message":             fdUnmarshal.Message,
+		"expired":             fdUnmarshal.Expired,
+		"path":                fdUnmarshal.Path,
+		"isPasswordProtected": len(fdUnmarshal.Password) > 0,
 	})
 }
 
@@ -154,40 +146,21 @@ func FileDownload(c *fiber.Ctx) error {
 	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
 
+	fmt.Println(fdUnmarshal)
+
+	if len(fdUnmarshal.Password) > 0 {
+		passwordHash := sha256.New()
+		passwordHash.Write([]byte(query.Password))
+		password := base64.URLEncoding.EncodeToString(passwordHash.Sum(nil))
+
+		if fdUnmarshal.Password != password {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid password",
+			})
+		}
+	}
+
 	f, _ := os.Open(fdUnmarshal.Path)
 
 	return c.Status(fiber.StatusOK).SendStream(bufio.NewReader(f))
-}
-
-func ShortenUrl(c *fiber.Ctx) error {
-	query := new(utilities.ShortenUrl)
-	c.QueryParser(query)
-
-	if errors := utilities.Validation(query); errors != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": errors,
-		})
-	}
-
-	id, _ := shortid.Generate()
-
-	err := db.Store.Put([]byte(id), []byte(query.Url), nil)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"short_url": fmt.Sprintf("/%s", id),
-	})
-}
-
-func RedirectUrl(c *fiber.Ctx) error {
-	url, error := db.Store.Get([]byte(c.Params("URL")), nil)
-	if error != nil {
-		return error
-	}
-
-	c.Set("location", string(url))
-	return c.Redirect(string(url))
 }

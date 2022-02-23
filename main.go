@@ -7,7 +7,6 @@ import (
 
 	"github.com/balaganapathyparthiban/quickshare-go/db"
 	"github.com/balaganapathyparthiban/quickshare-go/routes"
-	"github.com/balaganapathyparthiban/quickshare-go/services"
 	"github.com/balaganapathyparthiban/quickshare-go/utilities"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -55,7 +54,6 @@ func main() {
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Quick Share")
 	})
-	app.Get("/:URL", services.RedirectUrl)
 
 	routes.ApiRoutes(app)
 

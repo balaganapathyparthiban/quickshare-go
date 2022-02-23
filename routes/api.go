@@ -10,9 +10,6 @@ func ApiRoutes(app *fiber.App) {
 
 	/* File api */
 	api.Post("/file/upload", services.FileUpload)
-	api.Get("/file/upload/progress", services.FileUploadProgress)
+	api.Get("/file/info", services.FileInfo)
 	api.Get("/file/download", services.FileDownload)
-
-	/* Shortener api */
-	api.Get("/shorten/url", services.ShortenUrl)
 }
