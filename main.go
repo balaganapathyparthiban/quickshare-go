@@ -22,9 +22,9 @@ func init() {
 	flag.Parse()
 
 	/* In development get env values */
-	err := godotenv.Load(".env.dev")
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env.dev file")
+		log.Fatalf("Error loading .env file")
 	}
 
 	if IsDev {
@@ -50,7 +50,7 @@ func main() {
 
 	/* Routes */
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Quick Share")
+		return c.SendString("Healthcheck quickshare server.")
 	})
 
 	routes.ApiRoutes(app)
