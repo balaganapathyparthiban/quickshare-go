@@ -24,7 +24,7 @@ func init() {
 	/* In development get env values */
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env.dev file")
+		log.Fatalf("Error loading .env file")
 	}
 
 	if IsDev {
