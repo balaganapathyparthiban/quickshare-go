@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/balaganapathyparthiban/quickshare-go/db"
@@ -10,7 +10,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/helmet/v2"
-	"github.com/joho/godotenv"
 	"github.com/qinains/fastergoding"
 )
 
@@ -18,14 +17,8 @@ var IsDev bool
 
 func init() {
 	/* Check --dev is passed or not */
-	flag.BoolVar(&IsDev, "dev", false, "Pass --dev to load .env.dev file")
+	flag.BoolVar(&IsDev, "dev", false, "Pass --dev to enable fastergoding.")
 	flag.Parse()
-
-	/* In development get env values */
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
 
 	if IsDev {
 		/* Enable hotreload */
@@ -59,5 +52,10 @@ func main() {
 		return c.SendString("Not an valid path/method.")
 	})
 
-	app.Listen(os.Getenv("PORT"))
+	PORT := os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "5100"
+	}
+
+	app.Listen(fmt.Sprintf(":%s", PORT))
 }
