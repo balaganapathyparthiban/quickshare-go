@@ -7,7 +7,6 @@ import (
 
 	"github.com/balaganapathyparthiban/quickshare-go/db"
 	"github.com/balaganapathyparthiban/quickshare-go/routes"
-	"github.com/balaganapathyparthiban/quickshare-go/utilities"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/helmet/v2"
@@ -38,7 +37,6 @@ func init() {
 	}
 
 	db.InitDB()
-	utilities.InitCron()
 }
 
 func main() {

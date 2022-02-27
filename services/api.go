@@ -34,6 +34,8 @@ func FileUpload(c *fiber.Ctx) error {
 		passwordHash.Write([]byte(query.Password))
 		fd.Password = base64.URLEncoding.EncodeToString(passwordHash.Sum(nil))
 	}
+	fd.Name = query.Name
+	fd.Size = query.Size
 	fd.Expired = time.Now().Add(time.Hour * 24)
 
 	id, _ := shortid.Generate()
@@ -111,18 +113,26 @@ func FileInfo(c *fiber.Ctx) error {
 
 	data, err := db.Store.Get([]byte(query.Id), nil)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
 
+	if time.Now().After(fdUnmarshal.Expired) {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"error": "File link expired",
+		})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"title":               fdUnmarshal.Title,
 		"message":             fdUnmarshal.Message,
 		"expired":             fdUnmarshal.Expired,
-		"path":                fdUnmarshal.Path,
+		"name":                fdUnmarshal.Name,
+		"size":                fdUnmarshal.Size,
 		"isPasswordProtected": len(fdUnmarshal.Password) > 0,
 	})
 }
@@ -139,14 +149,13 @@ func FileDownload(c *fiber.Ctx) error {
 
 	data, err := db.Store.Get([]byte(query.Id), nil)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	var fdUnmarshal utilities.FileData
 	json.Unmarshal(data, &fdUnmarshal)
-
-	fmt.Println(fdUnmarshal)
 
 	if len(fdUnmarshal.Password) > 0 {
 		passwordHash := sha256.New()

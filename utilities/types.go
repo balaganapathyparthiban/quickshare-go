@@ -1,12 +1,16 @@
 package utilities
 
-import "time"
+import (
+	"time"
+)
 
 type FileData struct {
 	Title    string
 	Message  string
 	Password string
+	Name     string
 	Path     string
+	Size     int
 	Expired  time.Time
 }
 
