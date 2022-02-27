@@ -122,6 +122,7 @@ func FileInfo(c *fiber.Ctx) error {
 	json.Unmarshal(data, &fdUnmarshal)
 
 	if time.Now().After(fdUnmarshal.Expired) {
+		go checkFileExpiry()
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 			"error": "File link expired",
 		})
@@ -172,4 +173,98 @@ func FileDownload(c *fiber.Ctx) error {
 	f, _ := os.Open(fdUnmarshal.Path)
 
 	return c.Status(fiber.StatusOK).SendStream(bufio.NewReader(f))
+}
+
+func FileList(c *fiber.Ctx) error {
+	if os.Getenv("accessToken") != c.Params("token") {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid token",
+		})
+	}
+
+	var fileList []interface{}
+	iter := db.Store.NewIterator(nil, nil)
+	for iter.Next() {
+		value := iter.Value()
+
+		var fdUnmarshal utilities.FileData
+		json.Unmarshal(value, &fdUnmarshal)
+
+		fileMap := map[string]time.Time{}
+		fileMap[string(iter.Key())] = fdUnmarshal.Expired
+		fileList = append(fileList, fileMap)
+	}
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		fmt.Println(err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fileList)
+}
+
+func FileDelete(c *fiber.Ctx) error {
+	if os.Getenv("accessToken") != c.Params("token") {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid token",
+		})
+	}
+
+	query := new(utilities.FileDownload)
+	c.QueryParser(query)
+
+	if errors := utilities.Validation(query); errors != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": errors,
+		})
+	}
+
+	data, err := db.Store.Get([]byte(query.Id), nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	var fdUnmarshal utilities.FileData
+	json.Unmarshal(data, &fdUnmarshal)
+
+	os.RemoveAll(fmt.Sprintf("files/%s", query.Id))
+	db.Store.Delete([]byte(query.Id), nil)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "File deleted.",
+	})
+}
+
+func checkFileExpiry() {
+	iter := db.Store.NewIterator(nil, nil)
+	for iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		var fdUnmarshal utilities.FileData
+		json.Unmarshal(value, &fdUnmarshal)
+
+		isExpired := time.Now().After(fdUnmarshal.Expired)
+
+		if isExpired {
+			err := os.RemoveAll(fmt.Sprintf("files/%s", key))
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			db.Store.Delete([]byte(key), nil)
+		}
+
+	}
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		fmt.Println(err)
+	}
 }

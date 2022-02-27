@@ -12,4 +12,6 @@ func ApiRoutes(app *fiber.App) {
 	api.Post("/file/upload", services.FileUpload)
 	api.Get("/file/info", services.FileInfo)
 	api.Get("/file/download", services.FileDownload)
+	api.Get("/file/list/:token", services.FileList)
+	api.Get("/file/delete/:token", services.FileDelete)
 }
